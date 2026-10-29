@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>System dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: #090d12;
+        color: #d5dfeb;
+        font-synthesis: none;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        background: radial-gradient(ellipse at top, #111c29 0, #090d12 50rem);
+      }
+      button { font: inherit; }
+      #app {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        width: min(1600px, 100%);
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: clamp(16px, 2.5vw, 36px);
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .brand { display: flex; align-items: center; gap: 12px; }
+      .brand-mark {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 1px solid #29425a;
+        border-radius: 11px;
+        background: #132334;
+        color: #75c9ff;
+        font-size: 19px;
+      }
+      h1 { margin: 0; font-size: 1.08rem; font-weight: 650; letter-spacing: .01em; }
+      .subtitle { margin: 3px 0 0; color: #8393a5; font-size: .78rem; }
+      .live-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #92a1b2;
+        font-size: .8rem;
+      }
+      .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #607080; }
+      .live-badge[data-state="live"] .live-dot { background: #65d596; box-shadow: 0 0 12px #65d59688; }
+      .live-badge[data-state="error"] .live-dot { background: #f0a969; }
+      .panels {
+        display: grid;
+        flex: 1;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: repeat(2, minmax(350px, 1fr));
+        gap: 16px;
+        min-height: min(96vh, 1200px);
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        border: 1px solid #263646;
+        border-radius: 12px;
+        background: #0e151e;
+        box-shadow: 0 16px 50px #0002;
+      }
+      .panel-heading {
+        display: flex;
+        min-height: 58px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 16px;
+        border-bottom: 1px solid #202e3c;
+      }
+      .panel-title { display: flex; align-items: center; gap: 9px; }
+      .panel-title h2 { margin: 0; font-size: .88rem; font-weight: 600; }
+      .panel-icon { color: #78b9e7; font-size: .95rem; }
+      .panel-meta { color: #7f90a2; font-size: .74rem; }
+      #terminal {
+        flex: 1;
+        min-height: 0;
+        padding: 9px;
+        overflow: hidden;
+        background: #080c11;
+      }
+      #terminal .xterm { height: 100%; }
+      .explorer-toolbar {
+        display: flex;
+        min-height: 52px;
+        align-items: center;
+        gap: 5px;
+        padding: 0 12px;
+        border-bottom: 1px solid #202e3c;
+        overflow-x: auto;
+      }
+      .crumb {
+        flex: 0 0 auto;
+        padding: 6px 7px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #9fb2c5;
+        cursor: pointer;
+        font-size: .78rem;
+      }
+      .crumb:hover, .crumb[aria-current="page"] { background: #192635; color: #e1edf8; }
+      .crumb-separator { color: #56687a; font-size: .75rem; }
+      .icon-button {
+        display: grid;
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        margin-left: auto;
+        place-items: center;
+        border: 1px solid #2a3b4c;
+        border-radius: 7px;
+        background: #141f2a;
+        color: #afc1d2;
+        cursor: pointer;
+      }
+      .icon-button:hover { border-color: #45637d; color: #fff; }
+      .file-list {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 5px 8px;
+      }
+      .file-row {
+        display: grid;
+        grid-template-columns: 25px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 9px;
+        min-height: 38px;
+        padding: 0 9px;
+        border-radius: 6px;
+        color: #cbd7e2;
+        font-size: .8rem;
+      }
+      .file-row:hover { background: #16222e; }
+      button.file-row {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        cursor: pointer;
+      }
+      button.file-row:hover { background: #16222e; }
+      .file-icon { color: #8d9cad; text-align: center; }
+      .file-icon.directory { color: #e4b867; }
+      .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .file-size { color: #77899b; font-size: .72rem; }
+      .empty-state {
+        display: grid;
+        min-height: 150px;
+        place-items: center;
+        padding: 22px;
+        color: #8192a4;
+        font-size: .82rem;
+        text-align: center;
+      }
+      .error-state { color: #efaa8a; }
+      .panel-footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        border-top: 1px solid #202e3c;
+        color: #77899b;
+        font-size: .7rem;
+      }
+      @media (max-width: 760px) {
+        #app { gap: 12px; }
+        .panels {
+          flex: none;
+        }
+        .panel-heading { min-height: 50px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">⌘</div>
+          <div>
+            <h1>Server dashboard</h1>
+            <p class="subtitle">Live system monitor and files</p>
+          </div>
+        </div>
+        <div class="live-badge" :data-state="terminalState" role="status" aria-live="polite">
+          <span class="live-dot"></span>
+          <span>[[ terminalStatus ]]</span>
+        </div>
+      </header>
+
+      <main class="panels">
+        <section class="panel" aria-labelledby="monitor-heading">
+          <div class="panel-heading">
+            <div class="panel-title">
+              <span class="panel-icon" aria-hidden="true">▣</span>
+              <h2 id="monitor-heading">System monitor</h2>
+            </div>
+            <span class="panel-meta">btop · read only</span>
+          </div>
+          <div id="terminal" ref="terminalElement" aria-label="Live btop terminal"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="files-heading">
+          <div class="panel-heading">
+            <div class="panel-title">
+              <span class="panel-icon" aria-hidden="true">▤</span>
+              <h2 id="files-heading">File explorer</h2>
+            </div>
+            <span class="panel-meta">Read only</span>
+          </div>
+
+          <nav class="explorer-toolbar" aria-label="Directory breadcrumbs">
+            <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
+              <button
+                class="crumb"
+                type="button"
+                :aria-current="index === breadcrumbs.length - 1 ? 'page' : null"
+                @click="loadDirectory(crumb.path)"
+              >[[ crumb.name ]]</button>
+              <span v-if="index < breadcrumbs.length - 1" class="crumb-separator" aria-hidden="true">/</span>
+            </template>
+            <button class="icon-button" type="button" aria-label="Refresh directory" title="Refresh" @click="loadDirectory(currentPath)">
+              ↻
+            </button>
+          </nav>
+
+          <div class="file-list" aria-live="polite">
+            <div v-if="loadingFiles" class="empty-state">Loading directory…</div>
+            <div v-else-if="fileError" class="empty-state error-state">[[ fileError ]]</div>
+            <div v-else-if="entries.length === 0" class="empty-state">This directory is empty.</div>
+            <template v-else>
+              <template v-for="entry in entries" :key="entry.path">
+                <button
+                  v-if="entry.type === 'directory'"
+                  class="file-row"
+                  type="button"
+                  @click="loadDirectory(entry.path)"
+                >
+                  <span class="file-icon directory" aria-hidden="true">▸</span>
+                  <span class="file-name">[[ entry.name ]]</span>
+                  <span class="file-size">Folder</span>
+                </button>
+                <div v-else class="file-row">
+                  <span class="file-icon" aria-hidden="true">[[ entry.type === 'symlink' ? '↗' : '·' ]]</span>
+                  <span class="file-name" :title="entry.name">[[ entry.name ]]</span>
+                  <span class="file-size">[[ entry.type === 'symlink' ? 'Link' : formatSize(entry.size) ]]</span>
+                </div>
+              </template>
+            </template>
+          </div>
+
+          <div class="panel-footer">
+            <span>[[ entries.length ]] [[ entries.length === 1 ? 'item' : 'items' ]]</span>
+            <span>Browse only · file contents are not opened</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script>
+      const { createApp, ref, computed, onMounted, onBeforeUnmount } = Vue;
+
+      const dashboard = createApp({
+        setup() {
+          const terminalElement = ref(null);
+          const terminalStatus = ref("Connecting");
+          const terminalState = ref("connecting");
+          const entries = ref([]);
+          const currentPath = ref("/");
+          const loadingFiles = ref(true);
+          const fileError = ref("");
+          let terminal;
+          let fitAddon;
+          let stream;
+          let resizeObserver;
+          let resizeTimer;
+
+          const breadcrumbs = computed(() => {
+            const parts = currentPath.value.split("/").filter(Boolean);
+            return [
+              { name: "/", path: "/" },
+              ...parts.map((part, index) => ({
+                name: part,
+                path: `/${parts.slice(0, index + 1).join("/")}`
+              }))
+            ];
+          });
+
+          function formatSize(bytes) {
+            if (bytes === null || bytes === undefined) return "—";
+            if (bytes < 1024) return `${bytes} B`;
+            const units = ["KB", "MB", "GB", "TB"];
+            let size = bytes;
+            let unit = -1;
+            do {
+              size /= 1024;
+              unit += 1;
+            } while (size >= 1024 && unit < units.length - 1);
+            return `${size.toFixed(1)} ${units[unit]}`;
+          }
+
+          async function loadDirectory(path) {
+            loadingFiles.value = true;
+            fileError.value = "";
+            try {
+              const query = new URLSearchParams({ path });
+              const response = await fetch(`/api/files?${query}`);
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || "Unable to load this directory.");
+              currentPath.value = result.path;
+              entries.value = result.entries;
+            } catch (error) {
+              fileError.value = error.message;
+              entries.value = [];
+            } finally {
+              loadingFiles.value = false;
+            }
+          }
+
+          function connectTerminal() {
+            fitAddon.fit();
+            if (stream) stream.close();
+
+            stream = new EventSource(`/api/terminal?cols=${terminal.cols}&rows=${terminal.rows}`);
+            stream.onopen = () => {
+              terminalState.value = "live";
+              terminalStatus.value = "Live";
+            };
+            stream.onmessage = (event) => {
+              const bytes = Uint8Array.from(atob(event.data), (character) => character.charCodeAt(0));
+              terminal.write(bytes);
+            };
+            stream.onerror = () => {
+              terminalState.value = "connecting";
+              terminalStatus.value = "Reconnecting";
+            };
+          }
+
+          onMounted(() => {
+            loadDirectory("/");
+            if (!window.Terminal || !window.FitAddon) {
+              terminalState.value = "error";
+              terminalStatus.value = "Terminal renderer unavailable";
+              return;
+            }
+
+            terminal = new Terminal({
+              cursorBlink: false,
+              disableStdin: true,
+              scrollback: 0,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontSize: 6,
+              theme: { background: "#080c11", foreground: "#d5dfeb", cursor: "#080c11" }
+            });
+            fitAddon = new FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            terminal.open(terminalElement.value);
+            connectTerminal();
+
+            resizeObserver = new ResizeObserver(() => {
+              clearTimeout(resizeTimer);
+              resizeTimer = setTimeout(() => {
+                const oldSize = `${terminal.cols}x${terminal.rows}`;
+                fitAddon.fit();
+                if (`${terminal.cols}x${terminal.rows}` !== oldSize) connectTerminal();
+              }, 200);
+            });
+            resizeObserver.observe(terminalElement.value);
+          });
+
+          onBeforeUnmount(() => {
+            clearTimeout(resizeTimer);
+            if (resizeObserver) resizeObserver.disconnect();
+            if (stream) stream.close();
+            if (terminal) terminal.dispose();
+          });
+
+          return {
+            breadcrumbs,
+            currentPath,
+            entries,
+            fileError,
+            formatSize,
+            loadDirectory,
+            loadingFiles,
+            terminalElement,
+            terminalState,
+            terminalStatus
+          };
+        }
+      });
+      dashboard.config.compilerOptions.delimiters = ["[[", "]]"];
+      dashboard.mount("#app");
+    </script>
+  </body>
+</html>
